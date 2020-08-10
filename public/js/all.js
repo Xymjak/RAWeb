@@ -230,6 +230,19 @@ function updateAwardDisplayOrder(awardType, awardData, awardDataExtra, objID) {
   $('#warning').html('Status: updating...');
 }
 
+function updateEventDisplayOrder($id) {
+  var inputText = $('#' + $id).val();
+  var inputNum = Math.max(-1, Math.min(Number(inputText), 10000));
+  var posting = $.post('/request/events/updateDisplayOrder.php',
+      {
+        t: awardType,
+        d: awardData,
+        e: awardDataExtra,
+        v: inputNum,
+      });
+  posting.done(onUpdateDisplayOrderComplete);
+  $('#warning').html('Status: updating...');
+}
 function onUpdateDisplayOrderComplete(data) {
   if (data !== 'OK') {
     $('#warning').html('Status: Errors...' + data);
@@ -238,8 +251,8 @@ function onUpdateDisplayOrderComplete(data) {
   }
 }
 
-function injectBBCode(start, end) {
-  var commentTextarea = document.getElementById('commentTextarea');
+function injectBBCode(start, end, elementId = 'commentTextarea') {
+  var commentTextarea = document.getElementById(elementId);
   if (commentTextarea !== undefined) {
     // Something's selected: wrap it
     var startPos = commentTextarea.selectionStart;

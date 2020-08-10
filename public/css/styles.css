@@ -992,6 +992,19 @@ th {
   vertical-align: middle;
 }
 
+/* Events page */
+.eventseditcol1 {
+  width: 10%;
+}
+
+.eventsinfo {
+  width: 80%;
+}
+
+.eventsdescription {
+  margin-left: 1rem;
+}
+
 /* Forum */
 .commentpayload {
   padding: 6px 4px;
