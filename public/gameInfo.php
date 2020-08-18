@@ -61,9 +61,9 @@ $forumTopicID = $gameData['ForumTopicID'];
 $richPresenceData = $gameData['RichPresencePatch'];
 
 // Get the top ten players at this game:
-$gameTopAchievers = getGameTopAchievers($gameID, 0, 10, $user);
+$gameTopAchievers = getGameTopAchievers($gameID, 0, 10);
 
-$totalUniquePlayers = getTotalUniquePlayers($gameID, $user);
+$totalUniquePlayers = getTotalUniquePlayers($gameID);
 if ($numDistinctPlayersCasual < $totalUniquePlayers) {
     $numDistinctPlayersCasual = $totalUniquePlayers;
 }

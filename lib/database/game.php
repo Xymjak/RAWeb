@@ -844,10 +844,36 @@ function getGameListSearch($offset, $count, $method, $consoleID = null)
     return $retval;
 }
 
-function getTotalUniquePlayers($gameID, $requestedBy)
+function getTotalUniquePlayersSaved($gameID)
 {
-    settype($gameID, 'integer');
+    $query = "
+        SELECT UniquePlayers, UniquePlayersDate FROM gamedatasave
+        WHERE ID = $gameID";
 
+    $dbResult = s_mysql_query($query);
+    if ($dbResult == false) {
+        return null;
+    }
+
+    $data = mysqli_fetch_assoc($dbResult);
+    if ($data == null || $data["UniquePlayers"] == null) {
+        return null;
+    }
+    return $data;
+}
+
+function saveTotalUniquePlayers($gameID, $players)
+{
+    $timeNow = date("Y-m-d H:i:s");
+    $query = "
+        INSERT INTO gamedatasave (ID, UniquePlayers, UniquePlayersDate) 
+        VALUES ($gameID, $players, '$timeNow')
+        ON DUPLICATE KEY UPDATE UniquePlayers=$players, UniquePlayersDate='$timeNow'";
+    s_mysql_query($query);
+}
+
+function getTotalUniquePlayersActual($gameID, $requestedBy)
+{
     $query = "
         SELECT COUNT(DISTINCT aw.User) As UniquePlayers
         FROM Awarded AS aw
@@ -865,7 +891,77 @@ function getTotalUniquePlayers($gameID, $requestedBy)
     return $data['UniquePlayers'];
 }
 
-function getGameTopAchievers($gameID, $offset, $count, $requestedBy)
+function getTotalUniquePlayers($gameID, $requestedBy = null, $forceUpdate = false)
+{
+    $plThr = 500;
+    $timeThr = 21600;
+    settype($gameID, 'integer');
+    $allowSave = $requestedBy == null;
+    $saved = $allowSave && !$forceUpdate ? getTotalUniquePlayersSaved($gameID) : null;
+
+    if ($saved != null) {
+        $timeNow = time();
+        $timeSaved = strtotime($saved["UniquePlayersDate"]);
+        if ($timeNow - $timeSaved < $timeThr) {
+            return $saved['UniquePlayers'];
+        }
+    }
+
+    $players = getTotalUniquePlayersActual($gameID, $requestedBy);
+    if ($allowSave && $players > $plThr) {
+        saveTotalUniquePlayers($gameID, $players);
+    }
+    return $players;
+}
+
+function getGameTopAchieversSaved($gameID)
+{
+    $query = "
+        SELECT TopAchievers, TopAchieversDate FROM gamedatasave
+        WHERE ID = $gameID";
+
+    $dbResult = s_mysql_query($query);
+    if ($dbResult == false) {
+        return null;
+    }
+    $data = mysqli_fetch_assoc($dbResult);
+    if ($data == null || $data["TopAchievers"] == null) {
+        return null;
+    }
+    $tempArr = explode(",", $data["TopAchievers"]);
+    $count = (count($tempArr) - 1) / 2;
+    $topAchievers = [];
+    $totalScore = $tempArr[0];
+    for ($i = 0; $i < $count; $i++) {
+        $i2 = $i * 2;
+        $topAchievers[$i]["User"] = $tempArr[$i2 + 1];
+        $topAchievers[$i]["TotalScore"] = $totalScore;
+        $topAchievers[$i]["LastAward"] = date("Y-m-d H:i:s", $tempArr[$i2 + 2]);
+    }
+
+    $returnVal = [];
+    $returnVal["TopAchieversDate"] = $data["TopAchieversDate"];
+    $returnVal["TopAchievers"] = $topAchievers;
+
+    return $returnVal;
+}
+
+function saveGameTopAchievers($gameID, $topAchievers)
+{
+    $saveString = $topAchievers[0]["TotalScore"];
+    foreach ($topAchievers as $user) {
+        $saveString = "$saveString," . $user["User"] . "," . strtotime($user["LastAward"]);
+    }
+
+    $timeNow = date("Y-m-d H:i:s");
+    $query = "
+        INSERT INTO gamedatasave (ID, TopAchievers, TopAchieversDate) 
+        VALUES ($gameID, '$saveString', '$timeNow')
+        ON DUPLICATE KEY UPDATE TopAchievers='$saveString', TopAchieversDate='$timeNow'";
+    s_mysql_query($query);
+}
+
+function getGameTopAchieversActual($gameID, $offset, $count, $requestedBy)
 {
     $retval = [];
 
@@ -874,7 +970,7 @@ function getGameTopAchievers($gameID, $offset, $count, $requestedBy)
                 LEFT JOIN Achievements AS ach ON ach.ID = aw.AchievementID
                 LEFT JOIN GameData AS gd ON gd.ID = ach.GameID
                 LEFT JOIN UserAccounts AS ua ON ua.User = aw.User
-                WHERE ( !ua.Untracked OR ua.User = '$requestedBy' ) 
+                WHERE ( !ua.Untracked "  . (isset($requestedBy) ? " OR ua.User = '$requestedBy'" : "") . ") 
                   AND ach.Flags = 3 
                   AND gd.ID = $gameID
                 GROUP BY aw.User
@@ -891,6 +987,30 @@ function getGameTopAchievers($gameID, $offset, $count, $requestedBy)
     }
 
     return $retval;
+}
+
+function getGameTopAchievers($gameID, $offset, $count, $requestedBy = null, $forceUpdate = false)
+{
+    $timeThr = 248400;
+    settype($gameID, 'integer');
+
+    $allowSave = !isset($requestedBy) && $offset == 0 && $count == 10;
+
+    $saved = $allowSave && !$forceUpdate ? getGameTopAchieversSaved($gameID) : null;
+    if ($saved != null) {
+        $timeNow = time();
+        $timeSaved = strtotime($saved["TopAchieversDate"]);
+        if ($timeNow - $timeSaved < $timeThr) {
+            return $saved['TopAchievers'];
+        }
+    }
+
+    $topAchievers = getGameTopAchieversActual($gameID, $offset, $count, $requestedBy);
+    if ($allowSave && count($topAchievers) >=10 && $topAchievers[0]["TotalScore"] == $topAchievers[9]["TotalScore"]) {
+        saveGameTopAchievers($gameID, $topAchievers);
+    }
+
+    return $topAchievers;
 }
 
 function getGameRankAndScore($gameID, $requestedBy)
